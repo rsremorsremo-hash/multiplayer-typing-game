@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Type Racer Ultra</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --panel-alt: #1e293b;
+        --line: #334155;
+        --primary: #3b82f6;
+        --primary-strong: #2563eb;
+        --success: #22c55e;
+        --danger: #ef4444;
+        --warning: #fbbf24;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+      }
+
+      * {
+        box-sizing: border-box;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+      }
+
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        background: linear-gradient(180deg, #020817 0%, #0f172a 100%);
+        color: var(--text);
+      }
+
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 24px;
+      }
+
+      .app {
+        width: min(920px, 100%);
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+        padding: 24px;
+      }
+
+      .hidden { display: none !important; }
+
+      h2 {
+        margin-top: 0;
+        letter-spacing: 0.04em;
+      }
+
+      .lobby-grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      input, button {
+        width: 100%;
+        padding: 14px 16px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        font-size: 1rem;
+        outline: none;
+      }
+
+      input {
+        background: rgba(15, 23, 42, 0.9);
+        color: var(--text);
+      }
+
+      button {
+        background: linear-gradient(180deg, var(--primary) 0%, var(--primary-strong) 100%);
+        color: white;
+        font-weight: 700;
+        border: none;
+        cursor: pointer;
+        transition: transform 0.15s ease, opacity 0.15s ease;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        opacity: 0.98;
+      }
+
+      .game-layout {
+        display: grid;
+        grid-template-columns: 1.55fr 1fr;
+        gap: 18px;
+      }
+
+      .panel {
+        background: rgba(30, 41, 59, 0.72);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 16px;
+      }
+
+      .passage {
+        min-height: 110px;
+        margin-top: 16px;
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 18px;
+        font-size: 1.1rem;
+        line-height: 1.8;
+        letter-spacing: 0.04em;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .current {
+        background: rgba(59, 130, 246, 0.28);
+        border-radius: 4px;
+        box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.45);
+      }
+
+      .correct {
+        color: var(--success);
+        font-weight: 700;
+      }
+
+      .incorrect {
+        background: rgba(239, 68, 68, 0.25);
+        color: #fee2e2;
+        border-radius: 4px;
+      }
+
+      .stats {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 12px 0 16px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .status {
+        min-height: 24px;
+        color: var(--warning);
+        font-weight: 700;
+      }
+
+      .players {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .player-row {
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+        cursor: pointer;
+        transition: border-color 0.15s ease, transform 0.15s ease;
+      }
+
+      .player-row:hover {
+        border-color: rgba(59, 130, 246, 0.9);
+      }
+
+      .player-row.selected {
+        border-color: rgba(59, 130, 246, 0.9);
+        box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5);
+      }
+
+      .player-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .player-name {
+        font-weight: 700;
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .badge {
+        display: inline-block;
+        background: rgba(59, 130, 246, 0.18);
+        color: #bfdbfe;
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .bar-bg {
+        width: 100%;
+        height: 10px;
+        background: rgba(51, 65, 85, 0.9);
+        border-radius: 10px;
+        overflow: hidden;
+        margin-top: 8px;
+      }
+
+      .bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #60a5fa 0%, #3b82f6 100%);
+        transition: width 0.18s ease;
+      }
+
+      .powerups {
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+        flex-wrap: wrap;
+      }
+
+      .power-btn {
+        flex: 1 1 120px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        font-weight: 700;
+        background: rgba(148, 163, 184, 0.15);
+        color: var(--text);
+      }
+
+      .power-btn.shield {
+        background: rgba(16, 185, 129, 0.12);
+        border-color: rgba(16, 185, 129, 0.4);
+      }
+
+      .power-btn.slow {
+        background: rgba(251, 191, 36, 0.12);
+        border-color: rgba(251, 191, 36, 0.4);
+      }
+
+      .power-btn.nuke {
+        background: rgba(239, 68, 68, 0.12);
+        border-color: rgba(239, 68, 68, 0.5);
+      }
+
+      .winner {
+        color: var(--success);
+        font-size: 1.12rem;
+        font-weight: 800;
+        margin-top: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div id="lobby">
+        <h2>⚡ Type Racer Ultra</h2>
+        <div class="lobby-grid">
+          <input id="username" type="text" maxlength="18" placeholder="Player Name" />
+          <input id="roomCode" type="text" maxlength="12" placeholder="Room Code (e.g. TAMIL1)" />
+          <button id="joinBtn">Join / Create Room</button>
+        </div>
+      </div>
+
+      <div id="game" class="hidden">
+        <div class="game-layout">
+          <div class="panel">
+            <h2>🏁 Race Arena</h2>
+            <div id="statusText" class="status">Waiting for players...</div>
+
+            <div id="passage" class="passage"></div>
+
+            <div class="stats">
+              <span>WPM: <strong id="wpm">0</strong></span>
+              <span>Progress: <strong id="progress">0%</strong></span>
+              <span>Rank: <strong id="rankText">-</strong></span>
+            </div>
+
+            <input id="typingInput" type="text" placeholder="Start typing..." autocomplete="off" />
+
+            <div class="powerups">
+              <button class="power-btn shield" data-power="shield">🛡 Shield</button>
+              <button class="power-btn slow" data-power="slow">⏱ Slow</button>
+              <button class="power-btn nuke" data-power="nuke">💥 Nuke</button>
+            </div>
+
+            <div id="winnerBanner" class="winner hidden"></div>
+          </div>
+
+          <div class="panel">
+            <h2>🏆 Leaderboard</h2>
+            <div id="players" class="players"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const socket = io();
+
+      let currentRoom = "";
+      let targetText = "";
+      let selectedTargetId = null;
+      let startTime = null;
+      let roomData = null;
+
+      const lobbyEl = document.getElementById("lobby");
+      const gameEl = document.getElementById("game");
+      const joinBtn = document.getElementById("joinBtn");
+      const usernameInput = document.getElementById("username");
+      const roomInput = document.getElementById("roomCode");
+      const typingInput = document.getElementById("typingInput");
+      const passageEl = document.getElementById("passage");
+      const playersEl = document.getElementById("players");
+      const statusTextEl = document.getElementById("statusText");
+      const wpmEl = document.getElementById("wpm");
+      const progressEl = document.getElementById("progress");
+      const rankTextEl = document.getElementById("rankText");
+      const winnerBanner = document.getElementById("winnerBanner");
+
+      function joinGame() {
+        const username = usernameInput.value.trim();
+        const roomId = roomInput.value.trim().toUpperCase();
+
+        if (!roomId) {
+          alert("Please enter a room code.");
+          return;
+        }
+
+        currentRoom = roomId;
+        socket.emit("joinRoom", { roomId, username });
+
+        lobbyEl.classList.add("hidden");
+        gameEl.classList.remove("hidden");
+        typingInput.focus();
+      }
+
+      joinBtn.addEventListener("click", joinGame);
+      roomInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") joinGame();
+      });
+
+      function getCorrectCharsCount(value) {
+        let count = 0;
+        for (let i = 0; i < value.length && i < targetText.length; i++) {
+          if (value[i] === targetText[i]) count++;
+        }
+        return count;
+      }
+
+      function renderPassage() {
+        const typed = typingInput.value || "";
+        const correctChars = getCorrectCharsCount(typed);
+
+        let html = "";
+        for (let i = 0; i < targetText.length; i++) {
+          const char = targetText[i];
+
+          if (i < typed.length) {
+            if (typed[i] === char) {
+              html += `<span class="correct">${char}</span>`;
+            } else {
+              html += `<span class="incorrect">${char}</span>`;
+            }
+          } else if (i === typed.length) {
+            html += `<span class="current">${char}</span>`;
+          } else {
+            html += `<span>${char}</span>`;
+          }
+        }
+
+        passageEl.innerHTML = html;
+        return correctChars;
+      }
+
+      function syncSelectedTarget() {
+        const players = roomData ? Object.values(roomData.players || {}) : [];
+        const opponents = players.filter((player) => player.id !== socket.id && !player.finished);
+        if (!opponents.length) {
+          selectedTargetId = null;
+          return;
+        }
+
+        if (!selectedTargetId || !players.some((player) => player.id === selectedTargetId)) {
+          selectedTargetId = opponents[0].id;
+        }
+      }
+
+      function renderPlayers(players) {
+        const list = Object.values(players).sort((a, b) => {
+          if (a.finished !== b.finished) return Number(b.finished) - Number(a.finished);
+          if (b.progress !== a.progress) return b.progress - a.progress;
+          return b.wpm - a.wpm;
+        });
+
+        playersEl.innerHTML = "";
+
+        list.forEach((player, index) => {
+          const row = document.createElement("button");
+          row.type = "button";
+          row.className = "player-row" + (player.id === selectedTargetId ? " selected" : "");
+          row.innerHTML = `
+            <div class="player-header">
+              <span class="player-name">${player.username}</span>
+              <span class="badge">${player.finished ? "Finished" : `#${index + 1}`}</span>
+            </div>
+            <div>${player.wpm} WPM · ${player.progress}%</div>
+            <div class="bar-bg">
+              <div class="bar-fill" style="width: ${player.progress}%"></div>
+            </div>
+          `;
+
+          row.addEventListener("click", () => {
+            if (player.id !== socket.id) {
+              selectedTargetId = player.id;
+              renderPlayers(roomData.players);
+            }
+          });
+
+          playersEl.appendChild(row);
+        });
+      }
+
+      function updateStats() {
+        const players = roomData ? Object.values(roomData.players || {}) : [];
+        const sorted = [...players].sort((a, b) => {
+          if (a.finished !== b.finished) return Number(b.finished) - Number(a.finished);
+          if (b.progress !== a.progress) return b.progress - a.progress;
+          return b.wpm - a.wpm;
+        });
+
+        const me = players.find((player) => player.id === socket.id);
+        if (me) {
+          wpmEl.textContent = me.wpm;
+          progressEl.textContent = `${me.progress}%`;
+          rankTextEl.textContent = `#${sorted.findIndex((player) => player.id === socket.id) + 1}`;
+        }
+      }
+
+      function handleGameState(room) {
+        roomData = room;
+        targetText = room.passage;
+        syncSelectedTarget();
+        renderPlayers(room.players);
+        updateStats();
+
+        const me = room.players[socket.id];
+        if (me) {
+          if (me.shield) {
+            statusTextEl.textContent = "🛡 Shield active";
+          } else if (me.slow) {
+            statusTextEl.textContent = "⏱ Your typing is slowed";
+          } else {
+            statusTextEl.textContent = room.winner ? "Race complete" : "Race live";
+          }
+        }
+
+        if (room.winner) {
+          const winner = room.players[room.winner];
+          if (winner) {
+            winnerBanner.textContent = winner.id === socket.id ? "🎉 You won the race!" : `🏁 Winner: ${winner.username}`;
+            winnerBanner.classList.remove("hidden");
+          }
+        } else {
+          winnerBanner.classList.add("hidden");
+        }
+      }
+
+      socket.on("gameState", handleGameState);
+
+      socket.on("errorMessage", (message) => {
+        alert(message);
+      });
+
+      socket.on("powerUpBlocked", ({ type }) => {
+        statusTextEl.textContent = `🛡 ${type.toUpperCase()} blocked by shield`;
+      });
+
+      typingInput.addEventListener("input", (event) => {
+        if (!currentRoom) return;
+
+        const typed = event.target.value.slice(0, targetText.length);
+        const correctChars = getCorrectCharsCount(typed);
+        const progress = Math.min(100, Math.floor((correctChars / targetText.length) * 100));
+
+        if (!startTime) startTime = Date.now();
+
+        const elapsedMinutes = (Date.now() - startTime) / 60000;
+        const wpm = elapsedMinutes > 0 ? Math.max(0, Math.floor((correctChars / 5) / elapsedMinutes)) : 0;
+
+        typingInput.value = typed;
+        renderPassage();
+        wpmEl.textContent = wpm;
+        progressEl.textContent = `${progress}%`;
+
+        const finished = correctChars >= targetText.length;
+        if (finished) {
+          typingInput.value = targetText;
+          typingInput.disabled = true;
+          statusTextEl.textContent = "🏁 Race complete!";
+        }
+
+        socket.emit("updateProgress", {
+          roomId: currentRoom,
+          progress,
+          wpm,
+          finished
+        });
+      });
+
+      document.querySelectorAll(".power-btn").forEach((button) => {
+        button.addEventListener("click", () => {
+          const power = button.dataset.power;
+          if (!currentRoom) return;
+
+          if (power === "shield") {
+            socket.emit("usePowerUp", { roomId: currentRoom, type: "shield", targetId: socket.id });
+            return;
+          }
+
+          syncSelectedTarget();
+          if (!selectedTargetId) {
+            statusTextEl.textContent = "No opponent available";
+            return;
+          }
+
+          socket.emit("usePowerUp", {
+            roomId: currentRoom,
+            type: power,
+            targetId: selectedTargetId
+          });
+        });
+      });
+    </script>
+  </body>
+</html>
